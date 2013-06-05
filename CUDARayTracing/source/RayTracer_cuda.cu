@@ -171,7 +171,7 @@ void RunRayTracer(uchar4* dest, const int imageW, const int imageH, const int xT
 
 	float2 viewSize;
 
-	viewSize = make_float2(imageW, imageH);
+	viewSize = make_float2((float)imageW, (float)imageH);
 
 	RayTracer<<<numBlocks, numThreads>>>(dest, imageW, imageH, a_vCameraPosition, a_vCameraUp, a_vCameraForward, a_vCameraRight, a_fNearPlaneDistance, viewSize);
 }

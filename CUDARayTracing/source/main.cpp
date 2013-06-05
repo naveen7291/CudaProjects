@@ -257,18 +257,18 @@ void ProcessMouseMove(int x, int y)
 	clamp(xAngle, 0.0f, 0.3f);
 	clamp(yAngle, 0.0f, 0.3f);
 
-	g_vCameraForward.z = (g_vCameraForward.z * cos((float)xAngle) - (g_vCameraForward.x * sin((float)xAngle)));
-	g_vCameraForward.x = (g_vCameraForward.x * cos((float)xAngle) + (g_vCameraForward.z * sin((float)xAngle)));
-
-	//normalize(g_vCameraForward);
-	//normalize(g_vCameraUp);
-
-	printf("Forward: %f %f %f\n", g_vCameraForward.x, g_vCameraForward.y, g_vCameraForward.z);
-	printf("Up: %f %f %f\n", g_vCameraUp.x, g_vCameraUp.y, g_vCameraUp.z);
-	printf("Right: %f %f %f\n", g_vCameraRight.x, g_vCameraRight.y, g_vCameraRight.z);
+	g_vCameraForward.z = g_vCameraForward.z * cos(xAngle) - g_vCameraForward.x * sin(xAngle);
+	g_vCameraForward.x = g_vCameraForward.x * cos(xAngle) + g_vCameraForward.z * sin(xAngle);
+	g_vCameraForward = normalize(g_vCameraForward);
 
 	g_vCameraRight = normalize(CRTUtil::cross(g_vCameraUp, g_vCameraForward));
+
+	g_vCameraUp.y = g_vCameraUp.y * cos(yAngle) - g_vCameraUp.z * sin(yAngle);
+	g_vCameraUp.z = g_vCameraUp.z * cos(yAngle) + g_vCameraUp.y * sin(yAngle);
+	g_vCameraUp = normalize(g_vCameraUp);
+
 	g_vCameraForward = normalize(CRTUtil::cross(g_vCameraRight, g_vCameraUp));
+	g_vCameraRight = normalize(CRTUtil::cross(g_vCameraUp, g_vCameraForward));
 
 	g_nLastMouseX = x;
 	g_nLastMouseY = y;

@@ -167,6 +167,7 @@
       <Runtime>MT</Runtime>
       <Defines>WIN32</Defines>
       <Include>./;../CUDACommon/inc</Include>
+      <PtxAsOptionV>true</PtxAsOptionV>
     </CudaCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">

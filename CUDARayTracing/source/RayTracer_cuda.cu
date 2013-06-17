@@ -34,39 +34,63 @@ __global__ void RayTracer(uchar4* dest, const int imageW, const int imageH, floa
 
 	// Find where the ray intersects the near plane and create the vector portion of the ray from that
 	const float4 rayMidPoint = lookAt + cameraRight * ((float(ix) / float(imageW) - 0.5f) * viewSize.x) + cameraUp * ((float(iy) / float(imageH) - 0.5f) * viewSize.y); 
-	const float4 ray = normalize(rayMidPoint - cameraPosition);
+	float4 ray = normalize(rayMidPoint - cameraPosition);
 
 	// Hardcoded sphere
-	const float4 sphereCenter = make_float4(0, 0, 50, 1);
+	const float4 sphereCenter = make_float4(0, -1000, 50, 1);
 	const float4 sphereColor = make_float4(0.4f, 0, 0.4f, 1.0f);
-	const float radius = 10.0f;
+	const float radius = 1000.0f;
 
-	const float4 otherSphereCenter = make_float4(5, 0, 30, 1);
+	const float4 otherSphereCenter = make_float4(0, 5, 30, 1);
 	const float4 otherSphereColor = make_float4(0, 0.4f, 0.4f, 1.0f);
 	const float otherRadius = 1.0f;
 
 	// Hardcoded light
-	const float4 lightPosition = make_float4(10, 0, 20, 1);
+	const float4 lightPosition = make_float4(0, 30, 25, 1);
 
+	// Check if the camera can see the two spheres
 	float t = SphereIntersection(cameraPosition, ray, sphereCenter, radius);
 	float otherT = SphereIntersection(cameraPosition, ray, otherSphereCenter, otherRadius);
 
 	float4 intersectionPoint; 
 	float4 intersectionNormal;
 
+	// If the first sphere is closer
 	if(t > 0 && (t < otherT || otherT == -1.0f))
 	{
 		intersectionPoint = cameraPosition + t * ray;
 		intersectionNormal = normalize(intersectionPoint - sphereCenter);
+		float4 reflectedRay = CRTUtil::reflect(ray, intersectionNormal);
+		
+		ray = normalize(lightPosition - intersectionPoint);
 
-		float lightT = SphereIntersection(intersectionPoint, normalize(lightPosition - intersectionPoint), otherSphereCenter, otherRadius);
+		// Check if there is anything between the first sphere and the light
+		float lightT = SphereIntersection(intersectionPoint, ray, otherSphereCenter, otherRadius);
+		float reflectT = SphereIntersection(intersectionPoint, reflectedRay, otherSphereCenter, otherRadius);
+		
 
 		if(lightT <= 0)
 		{
-			pixelColor = PointLightContribution(intersectionPoint, intersectionNormal, sphereColor, lightPosition, cameraPosition);
+			if(reflectT > 0)
+			{
+				pixelColor = sphereColor * 0.2f + otherSphereColor * 0.8f;
+			}
+			else
+			{
+				pixelColor = sphereColor * 0.2f + make_float4(BACKGROUND_COLOR) * 0.8f;
+			}
+			
+			// If not, light it fully
+			pixelColor = PointLightContribution(intersectionPoint, intersectionNormal, pixelColor, lightPosition, cameraPosition);
 		}
 		else
 		{
+			//intersectionPoint = intersectionPoint + lightT * ray;
+			//intersectionNormal = normalize(intersectionPoint - otherSphereCenter);
+
+			//pixelColor = PointLightContribution(intersectionPoint, intersectionNormal, otherSphereColor, lightPosition, cameraPosition);
+
+			// Otherwise it is shadowed, just use ambient light
 			pixelColor = sphereColor * AMBIENT_STRENGTH;
 			pixelColor.w = 1.0f;
 		}

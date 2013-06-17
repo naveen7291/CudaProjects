@@ -19,7 +19,7 @@
 #define INFINITY		FLT_MAX
 
 // INITIAL CAMERA VALUES
-#define CAMERA_LOCATION				0, 0, 0, 1
+#define CAMERA_LOCATION				0, 5, 0, 1
 #define CAMERA_FORWARD				0, 0, 1, 0
 #define CAMERA_UP					0, 1, 0, 0
 #define CAMERA_RIGHT				1, 0, 0, 0

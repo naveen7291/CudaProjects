@@ -7,4 +7,5 @@ namespace CRTUtil
 		const float3 temp = ::cross(make_float3(a.x, a.y, a.z), make_float3(b.x, b.y, b.z));
 		return make_float4(temp.x, temp.y, temp.z, 0);
 	}
+
 }

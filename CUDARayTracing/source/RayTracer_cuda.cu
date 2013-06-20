@@ -73,11 +73,18 @@ __global__ void RayTracer(uchar4* dest, const int imageW, const int imageH, floa
 		{
 			if(reflectT > 0)
 			{
-				pixelColor = sphereColor * 0.2f + otherSphereColor * 0.8f;
+				const float4 reflectionIntersectionPoint = intersectionPoint + reflectedRay * reflectT;
+				const float4 reflectionIntersectionNormal = reflectionIntersectionPoint - otherSphereCenter;
+				float4 litOtherSphereColor = PointLightContribution(reflectionIntersectionPoint, reflectionIntersectionNormal, otherSphereColor, lightPosition, cameraPosition);
+				// Didn't compile
+				//pixelColor = sphereColor * 0.7f + otherSphereColor * 0.3f;
+				pixelColor = sphereColor * 0.7f;
+				pixelColor += litOtherSphereColor * 0.3f;
 			}
 			else
 			{
-				pixelColor = sphereColor * 0.2f + make_float4(BACKGROUND_COLOR) * 0.8f;
+				pixelColor = sphereColor * 1.0f;
+				pixelColor += make_float4(BACKGROUND_COLOR) * 0.0f;
 			}
 			
 			// If not, light it fully
@@ -190,8 +197,8 @@ __device__ float QuadatricSolver(float A, float B, float C)
 
 void RunRayTracer(uchar4* dest, const int imageW, const int imageH, const int xThreadsPerBlock, const float4 a_vCameraPosition, const float4 a_vCameraForward, const float4 a_vCameraUp, const float4 a_vCameraRight, const float a_fNearPlaneDistance)
 {
-	dim3 numThreads(20, 20);
-	dim3 numBlocks(64, 36);
+	dim3 numThreads(16, 16);
+	dim3 numBlocks(80, 45);
 
 	float2 viewSize;
 

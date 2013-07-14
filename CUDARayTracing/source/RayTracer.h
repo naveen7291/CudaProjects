@@ -34,10 +34,14 @@
 // INPUT CONSTANTS
 #define NUMBER_OF_INPUTS			256
 
+// MEMORY CONSTANTS
+#define SIZEOF_SPHERE				sizeof(float) * 9
+
 #include <vector_types.h>
+#include <stdlib.h>
 #include "LinearAlgebraUtil.h"
 
 extern "C" void RunRayTracer(uchar4* dest, const int imageW, const int imageH, const int xThreadsPerBlock, const float4 a_vCameraPosition, const float4 cameraForward, const float4 cameraUp, const float4 cameraRight, const float a_fNearPlaneDistance);
-
+extern "C" void RunRayTracerWithTexture(uchar4* dest, const int imageW, const int imageH, const int xThreadsPerBlock, const float4 a_vCameraPosition, const float4 cameraForward, const float4 cameraUp, const float4 cameraRight, const float a_fNearPlaneDistance);
 
 #endif

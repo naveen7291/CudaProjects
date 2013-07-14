@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <stdlib.h>
 
 #include "RayTracer.h"
 #include "geometry.h"
@@ -86,7 +85,7 @@ void RenderImage()
 	size_t num_bytes;
 	checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **)&d_Dest, &num_bytes, cuda_pbo_resource));
 
-	RunRayTracer(d_Dest, WINDOW_WIDTH, WINDOW_HEIGHT, 0, g_vCameraLocation, g_vCameraForward, g_vCameraUp, g_vCameraRight, g_fNearPlaneDistance);
+	RunRayTracerWithTexture(d_Dest, WINDOW_WIDTH, WINDOW_HEIGHT, 0, g_vCameraLocation, g_vCameraForward, g_vCameraUp, g_vCameraRight, g_fNearPlaneDistance);
 
 	cudaDeviceSynchronize();
 	checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0));

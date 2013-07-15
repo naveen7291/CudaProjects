@@ -52,10 +52,10 @@ int fpsLimit = 15;       // FPS limit for sampling
 unsigned int frameCount = 0;
 
 // Tweakable values
-float4 g_vCameraLocation;
-float4 g_vCameraForward;
-float4 g_vCameraRight;
-float4 g_vCameraUp;
+float3 g_vCameraLocation;
+float3 g_vCameraForward;
+float3 g_vCameraRight;
+float3 g_vCameraUp;
 float g_fNearPlaneDistance;
 
 // Input flags
@@ -215,7 +215,7 @@ void ProcessKeyboard(unsigned char k, int, int)
 			g_aInputFlags[k] = true;
    }
 
-   printf("Camera Location: (%f, %f, %f, %f), NearPlaneDistance: %f\n", g_vCameraLocation.x, g_vCameraLocation.y, g_vCameraLocation.z, g_vCameraLocation.w, g_fNearPlaneDistance);
+   printf("Camera Location: (%f, %f, %f), NearPlaneDistance: %f\n", g_vCameraLocation.x, g_vCameraLocation.y, g_vCameraLocation.z, g_fNearPlaneDistance);
 }
 
 void ProcessKeyboardUp(unsigned char k, int, int)
@@ -260,14 +260,14 @@ void ProcessMouseMove(int x, int y)
 	g_vCameraForward.x = g_vCameraForward.x * cos(xAngle) + g_vCameraForward.z * sin(xAngle);
 	g_vCameraForward = normalize(g_vCameraForward);
 
-	g_vCameraRight = normalize(CRTUtil::cross(g_vCameraUp, g_vCameraForward));
+	g_vCameraRight = normalize(cross(g_vCameraUp, g_vCameraForward));
 
 	g_vCameraUp.y = g_vCameraUp.y * cos(yAngle) - g_vCameraUp.z * sin(yAngle);
 	g_vCameraUp.z = g_vCameraUp.z * cos(yAngle) + g_vCameraUp.y * sin(yAngle);
 	g_vCameraUp = normalize(g_vCameraUp);
 
-	g_vCameraForward = normalize(CRTUtil::cross(g_vCameraRight, g_vCameraUp));
-	g_vCameraRight = normalize(CRTUtil::cross(g_vCameraUp, g_vCameraForward));
+	g_vCameraForward = normalize(cross(g_vCameraRight, g_vCameraUp));
+	g_vCameraRight = normalize(cross(g_vCameraUp, g_vCameraForward));
 
 	g_nLastMouseX = x;
 	g_nLastMouseY = y;
@@ -313,10 +313,10 @@ void InitializeOpenGL(int* argc, char** argv)
     printf("OpenGL window created.\n");	
 
 	//Initialize tweakable values
-	g_vCameraLocation = make_float4(CAMERA_LOCATION);
-	g_vCameraForward = make_float4(CAMERA_FORWARD);
-	g_vCameraUp = make_float4(CAMERA_UP);
-	g_vCameraRight = make_float4(CAMERA_RIGHT);
+	g_vCameraLocation = make_float3(CAMERA_LOCATION);
+	g_vCameraForward = make_float3(CAMERA_FORWARD);
+	g_vCameraUp = make_float3(CAMERA_UP);
+	g_vCameraRight = make_float3(CAMERA_RIGHT);
 	g_fNearPlaneDistance = NEAR_PLANE_DISTANCE;
 
 	for(int i = 0; i < NUMBER_OF_INPUTS; ++i)

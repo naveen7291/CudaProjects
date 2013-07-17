@@ -20,6 +20,8 @@
 __device__ float SphereIntersection(float3 rayOrigin, float3 rayDirection, float3 spherePosition, float sphereRadius);
 __device__ float QuadatricSolver(float A, float B, float C);
 __device__ float4 PointLightContribution(float3 position, float3 normal, float4 color, float3 lightPosition, float3 cameraPosition);
+__device__ float4 GetSphereColor(int sphereIndex);
+__device__ float3 GetSpherePosition(int sphereIndex);
 
 texture<float, 1, cudaReadModeElementType> tex;
 
@@ -246,14 +248,9 @@ __global__ void RayTracerWithTexture(uchar4* dest, const int imageW, const int i
 
 	for(int i = 0; i < numSpheres; ++i)
 	{
-		sphereColor = make_float4(	tex1D(tex, i * SPHERE_NUMFLOATS + SPHERE_COLOR_R), 
-									tex1D(tex, i * SPHERE_NUMFLOATS + SPHERE_COLOR_G), 
-									tex1D(tex, i * SPHERE_NUMFLOATS + SPHERE_COLOR_B), 
-									tex1D(tex, i * SPHERE_NUMFLOATS + SPHERE_COLOR_A));
+		sphereColor = GetSphereColor(i);
 		
-		sphereCenter = make_float3(	tex1D(tex, i * SPHERE_NUMFLOATS + SPHERE_POS_X), 
-									tex1D(tex, i * SPHERE_NUMFLOATS + SPHERE_POS_Y), 
-									tex1D(tex, i * SPHERE_NUMFLOATS + SPHERE_POS_Z));
+		sphereCenter = GetSpherePosition(i);
 		
 		radius =					tex1D(tex, i * SPHERE_NUMFLOATS + SPHERE_RADIUS);
 
@@ -269,13 +266,8 @@ __global__ void RayTracerWithTexture(uchar4* dest, const int imageW, const int i
 
 	if(tMin < INFINITY)
 	{
-		sphereColor = make_float4(	tex1D(tex, iMin * SPHERE_NUMFLOATS + SPHERE_COLOR_R), 
-									tex1D(tex, iMin * SPHERE_NUMFLOATS + SPHERE_COLOR_G), 
-									tex1D(tex, iMin * SPHERE_NUMFLOATS + SPHERE_COLOR_B), 
-									tex1D(tex, iMin * SPHERE_NUMFLOATS + SPHERE_COLOR_A));
-		sphereCenter = make_float3(	tex1D(tex, iMin * SPHERE_NUMFLOATS + SPHERE_POS_X), 
-									tex1D(tex, iMin * SPHERE_NUMFLOATS + SPHERE_POS_Y), 
-									tex1D(tex, iMin * SPHERE_NUMFLOATS + SPHERE_POS_Z));
+		sphereColor = GetSphereColor(iMin);
+		sphereCenter = GetSpherePosition(iMin);
 		
 		intersectionPoint = cameraPosition + tMin * ray;
 		intersectionNormal = normalize(intersectionPoint - sphereCenter);
@@ -289,6 +281,21 @@ __global__ void RayTracerWithTexture(uchar4* dest, const int imageW, const int i
 	}
 
 	dest[pixelIndex] = make_uchar4((unsigned char)(pixelColor.x * 255), (unsigned char)(pixelColor.y * 255), (unsigned char)(pixelColor.z * 255), 255);
+}
+
+__device__ float4 GetSphereColor(int sphereIndex)
+{
+	return make_float4(	tex1D(tex, sphereIndex * SPHERE_NUMFLOATS + SPHERE_COLOR_R), 
+						tex1D(tex, sphereIndex * SPHERE_NUMFLOATS + SPHERE_COLOR_G), 
+						tex1D(tex, sphereIndex * SPHERE_NUMFLOATS + SPHERE_COLOR_B), 
+						tex1D(tex, sphereIndex * SPHERE_NUMFLOATS + SPHERE_COLOR_A));
+}
+
+__device__ float3 GetSpherePosition(int sphereIndex)
+{
+	return make_float3(	tex1D(tex, sphereIndex * SPHERE_NUMFLOATS + SPHERE_POS_X), 
+						tex1D(tex, sphereIndex * SPHERE_NUMFLOATS + SPHERE_POS_Y), 
+						tex1D(tex, sphereIndex * SPHERE_NUMFLOATS + SPHERE_POS_Z));
 }
 
 __device__ float4 PointLightContribution(float3 position, float3 normal, float4 color, float3 lightPosition, float3 cameraPosition)

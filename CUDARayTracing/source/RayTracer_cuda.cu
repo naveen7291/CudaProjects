@@ -18,10 +18,11 @@
 
 
 __device__ float SphereIntersection(float3 rayOrigin, float3 rayDirection, float3 spherePosition, float sphereRadius);
-__device__ float QuadatricSolver(float A, float B, float C);
+__device__ float QuadraticSolver(float A, float B, float C);
 __device__ float4 PointLightContribution(float3 position, float3 normal, float4 color, float3 lightPosition, float3 cameraPosition);
 __device__ float4 GetSphereColor(int sphereIndex);
 __device__ float3 GetSpherePosition(int sphereIndex);
+__device__ float GetSphereRadius(int sphereIndex);
 
 texture<float, 1, cudaReadModeElementType> tex;
 
@@ -226,6 +227,7 @@ __global__ void RayTracerWithTexture(uchar4* dest, const int imageW, const int i
 
 	// Compute the location in the dest array that will be written to
 	const int pixelIndex = imageW * iy + ix;
+	float4 colorComponents[REFLECTION_DEPTH];
 	float4 pixelColor;
 
 	// Compute the center of the near plane. All rays will be computed as an offset from this point
@@ -244,40 +246,115 @@ __global__ void RayTracerWithTexture(uchar4* dest, const int imageW, const int i
 	float radius;
 	float t = INFINITY;
 	float tMin = INFINITY;
-	int iMin;
+	int iClosestSphere;
 
+	// Test the camera ray against all spheres in the scene
 	for(int i = 0; i < numSpheres; ++i)
 	{
-		sphereColor = GetSphereColor(i);
-		
 		sphereCenter = GetSpherePosition(i);
-		
-		radius =					tex1D(tex, i * SPHERE_NUMFLOATS + SPHERE_RADIUS);
+		radius = GetSphereRadius(i);
 
 		t = SphereIntersection(cameraPosition, ray, sphereCenter, radius);
 		if(t > 0 && t < tMin)
 		{
 			tMin = t;
-			iMin = i;
+			iClosestSphere = i;
 		}
-
-		
 	}
 
-	if(tMin < INFINITY)
+	
+	for(int i = 0; i < REFLECTION_DEPTH; ++i)
 	{
-		sphereColor = GetSphereColor(iMin);
-		sphereCenter = GetSpherePosition(iMin);
+		// If the camera ray intersected with a sphere, compute lighting and reflection
+		if(tMin < INFINITY)
+		{
+			float3 shadowRay;
+			float3 intersectedSphereCenter;
+			float intersectedSphereRadius;
+			int iClosestReflectedSphere;
+
+			sphereColor = GetSphereColor(iClosestSphere);
+			sphereCenter = GetSpherePosition(iClosestSphere);
+
+			// Find the point of intersection on the sphere and the normal at that point
+			intersectionPoint = cameraPosition + tMin * ray;
+			intersectionNormal = normalize(intersectionPoint - sphereCenter);
+			shadowRay = normalize(lightPosition - intersectionPoint);
+			ray = reflect(ray, intersectionNormal);
+
+			t = INFINITY;
+			tMin = INFINITY;
 		
-		intersectionPoint = cameraPosition + tMin * ray;
-		intersectionNormal = normalize(intersectionPoint - sphereCenter);
+			// Test for intersection using a shadow ray from the intersection point to the light source
+			for(int j = 0; j < numSpheres; ++j)
+			{
+				// Don't compare the shadowed sphere against itself
+				if(j == iClosestSphere)
+				{
+					continue;
+				}
 
+				intersectedSphereCenter = GetSpherePosition(j);
+				intersectedSphereRadius = GetSphereRadius(j);
 
-		pixelColor = PointLightContribution(intersectionPoint, intersectionNormal, sphereColor, lightPosition, cameraPosition);
-	}
-	else
-	{
-		pixelColor = make_float4(BACKGROUND_COLOR);
+				t = SphereIntersection(intersectionPoint, shadowRay, intersectedSphereCenter, intersectedSphereRadius);
+				if(t > 0 && t < tMin)
+				{
+					tMin = t;
+				}
+			}
+
+			if(tMin < INFINITY)
+			{
+				colorComponents[i] = sphereColor * AMBIENT_STRENGTH;
+				colorComponents[i].w = 1.0f;
+			}
+			else
+			{
+				colorComponents[i] = PointLightContribution(intersectionPoint, intersectionNormal, sphereColor, lightPosition, cameraPosition);
+			}
+
+			// Test for intersection using a reflected ray
+			for(int j = 0; j < numSpheres; ++j)
+			{
+				if(j == iClosestSphere)
+				{
+					continue;
+				}
+
+				intersectedSphereCenter = GetSpherePosition(j);
+				intersectedSphereRadius = GetSphereRadius(j);
+
+				t = SphereIntersection(intersectionPoint, ray, intersectedSphereCenter, intersectedSphereRadius);
+				if(t > 0 && t < tMin)
+				{
+					tMin = t;
+					iClosestReflectedSphere = j;
+				}
+			}
+
+			if(tMin < INFINITY)
+			{
+				iClosestSphere = iClosestReflectedSphere;
+			}
+			else
+			{
+				int j;
+
+				for(j = i; j >= 1; --j)
+				{
+					colorComponents[j - 1] = colorComponents[j - 1] * 0.7f + colorComponents[j] * 0.3f;
+				}
+
+				pixelColor = colorComponents[j];
+
+				break;
+			}
+		}
+		else
+		{
+			pixelColor = make_float4(BACKGROUND_COLOR);
+		}
 	}
 
 	dest[pixelIndex] = make_uchar4((unsigned char)(pixelColor.x * 255), (unsigned char)(pixelColor.y * 255), (unsigned char)(pixelColor.z * 255), 255);
@@ -296,6 +373,11 @@ __device__ float3 GetSpherePosition(int sphereIndex)
 	return make_float3(	tex1D(tex, sphereIndex * SPHERE_NUMFLOATS + SPHERE_POS_X), 
 						tex1D(tex, sphereIndex * SPHERE_NUMFLOATS + SPHERE_POS_Y), 
 						tex1D(tex, sphereIndex * SPHERE_NUMFLOATS + SPHERE_POS_Z));
+}
+
+__device__ float GetSphereRadius(int sphereIndex)
+{
+	return tex1D(tex, sphereIndex * SPHERE_NUMFLOATS + SPHERE_RADIUS);
 }
 
 __device__ float4 PointLightContribution(float3 position, float3 normal, float4 color, float3 lightPosition, float3 cameraPosition)
@@ -325,10 +407,10 @@ __device__ float SphereIntersection(float3 rayOrigin, float3 rayDirection, float
 	const float B = 2 * dot(rayOriginMinusSphereCenter, rayDirection);
 	const float C = dot(rayOriginMinusSphereCenter, rayOriginMinusSphereCenter) - sphereRadius * sphereRadius;
 
-	return QuadatricSolver(A, B, C);
+	return QuadraticSolver(A, B, C);
 }
 
-__device__ float QuadatricSolver(float A, float B, float C)
+__device__ float QuadraticSolver(float A, float B, float C)
 {
 	//Calculate the discriminant
 	const float disc = B * B - 4 * A * C;
@@ -397,16 +479,16 @@ void RunRayTracerWithTexture(uchar4* dest, const int imageW, const int imageH, c
 
 	viewSize = make_float2((float)imageW, (float)imageH);
 
-	sceneData = (float *)malloc(2 * SIZEOF_SPHERE);
+	sceneData = (float *)malloc(NUMBER_OF_SPHERES * SIZEOF_SPHERE);
 
 	sceneData[0] = 0.4f;
 	sceneData[1] = 0;
 	sceneData[2] = 0.4f;
 	sceneData[3] = 1.0f;
 	sceneData[4] = 0;
-	sceneData[5] = -1000;
+	sceneData[5] = -100;
 	sceneData[6] = 50;
-	sceneData[7] = 1000.0f;
+	sceneData[7] = 100.0f;
 
 	sceneData[8] = 0;
 	sceneData[9] = 0.4f;
@@ -416,13 +498,22 @@ void RunRayTracerWithTexture(uchar4* dest, const int imageW, const int imageH, c
 	sceneData[13] = 5;
 	sceneData[14] = 30;
 	sceneData[15] = 1.0f;
+
+	sceneData[16] = 0.4f;
+	sceneData[17] = 0.4f;
+	sceneData[18] = 0;
+	sceneData[19] = 1.0f;
+	sceneData[20] = 10;
+	sceneData[21] = 5;
+	sceneData[22] = 30;
+	sceneData[23] = 1.0f;
     
 	cudaChannelFormatDesc channelDesc =
         cudaCreateChannelDesc<float>();
  
     cudaArray *cuArray;
-    checkCudaErrors(cudaMallocArray(&cuArray, &channelDesc, 2 * SIZEOF_SPHERE, 1));
-	checkCudaErrors(cudaMemcpyToArray(cuArray, 0, 0, sceneData, 2 * SIZEOF_SPHERE, cudaMemcpyHostToDevice));
+    checkCudaErrors(cudaMallocArray(&cuArray, &channelDesc, NUMBER_OF_SPHERES * SIZEOF_SPHERE, 1));
+	checkCudaErrors(cudaMemcpyToArray(cuArray, 0, 0, sceneData, NUMBER_OF_SPHERES * SIZEOF_SPHERE, cudaMemcpyHostToDevice));
 	free(sceneData);
 
 	tex.addressMode[0] = cudaAddressModeWrap;
@@ -433,7 +524,7 @@ void RunRayTracerWithTexture(uchar4* dest, const int imageW, const int imageH, c
 	checkCudaErrors(cudaBindTextureToArray(tex, cuArray, channelDesc));
 
 
-	RayTracerWithTexture<<<numBlocks, numThreads>>>(dest, imageW, imageH, a_vCameraPosition, a_vCameraUp, a_vCameraForward, a_vCameraRight, a_fNearPlaneDistance, viewSize, 2);
+	RayTracerWithTexture<<<numBlocks, numThreads>>>(dest, imageW, imageH, a_vCameraPosition, a_vCameraUp, a_vCameraForward, a_vCameraRight, a_fNearPlaneDistance, viewSize, NUMBER_OF_SPHERES);
 
 	//huge performance decrease
 	checkCudaErrors(cudaFreeArray(cuArray));

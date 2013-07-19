@@ -123,102 +123,35 @@ __global__ void RayTracer(uchar4* dest, const int imageW, const int imageH, floa
 	//dest[pixelIndex] = make_uchar4((unsigned char)(pixelColor.x * 255), (unsigned char)(pixelColor.y * 255), (unsigned char)(pixelColor.z * 255), 255);
 }
 
-//__global__ void RayTracerWithTexture(uchar4* dest, const int imageW, const int imageH, float4 cameraPosition, float4 cameraUp, float4 cameraForward, float4 cameraRight, float nearPlaneDistance, float2 viewSize, int numSpheres)
-//{
-//	const int ix = blockIdx.x * blockDim.x + threadIdx.x;
-//	const int iy = blockIdx.y * blockDim.y + threadIdx.y;
-//
-//	// Compute the location in the dest array that will be written to
-//	const int pixelIndex = imageW * iy + ix;
-//	float4 pixelColor;
-//
-//	// Compute the center of the near plane. All rays will be computed as an offset from this point
-//	const float4 lookAt = cameraPosition + cameraForward * nearPlaneDistance;
-//
-//	// Find where the ray intersects the near plane and create the vector portion of the ray from that
-//	const float4 rayMidPoint = lookAt + cameraRight * ((float(ix) / float(imageW) - 0.5f) * viewSize.x) + cameraUp * ((float(iy) / float(imageH) - 0.5f) * viewSize.y); 
-//	float4 ray = normalize(rayMidPoint - cameraPosition);
-//
-//	// Hardcoded sphere
-//	const float4 sphereColor = make_float4(tex1D(tex, SPHERE_COLOR_R), tex1D(tex, SPHERE_COLOR_G), tex1D(tex, SPHERE_COLOR_B), tex1D(tex, SPHERE_COLOR_A));
-//	const float4 sphereCenter = make_float4(tex1D(tex, SPHERE_POS_X), tex1D(tex, SPHERE_POS_Y), tex1D(tex, SPHERE_POS_Z), 1);
-//	const float radius = tex1D(tex, SPHERE_RADIUS);
-//
-//	const float4 otherSphereColor = make_float4(tex1D(tex, SPHERE_NUMFLOATS + SPHERE_COLOR_R), tex1D(tex, SPHERE_NUMFLOATS + SPHERE_COLOR_G), tex1D(tex, SPHERE_NUMFLOATS + SPHERE_COLOR_B), tex1D(tex, SPHERE_NUMFLOATS + SPHERE_COLOR_A));
-//	const float4 otherSphereCenter = make_float4(tex1D(tex, SPHERE_NUMFLOATS + SPHERE_POS_X), tex1D(tex, SPHERE_NUMFLOATS + SPHERE_POS_Y), tex1D(tex, SPHERE_NUMFLOATS + SPHERE_POS_Z), 1);
-//	const float otherRadius = tex1D(tex, SPHERE_NUMFLOATS + SPHERE_RADIUS);
-//
-//	// Hardcoded light
-//	const float4 lightPosition = make_float4(0, 30, 25, 1);
-//
-//	// Check if the camera can see the two spheres
-//	float t = SphereIntersection(cameraPosition, ray, sphereCenter, radius);
-//	float otherT = SphereIntersection(cameraPosition, ray, otherSphereCenter, otherRadius);
-//
-//	float4 intersectionPoint; 
-//	float4 intersectionNormal;
-//
-//	// If the first sphere is closer
-//	if(t > 0 && (t < otherT || otherT == -1.0f))
-//	{
-//		intersectionPoint = cameraPosition + t * ray;
-//		intersectionNormal = normalize(intersectionPoint - sphereCenter);
-//		float4 reflectedRay = CRTUtil::reflect(ray, intersectionNormal);
-//		
-//		ray = normalize(lightPosition - intersectionPoint);
-//
-//		// Check if there is anything between the first sphere and the light
-//		float lightT = SphereIntersection(intersectionPoint, ray, otherSphereCenter, otherRadius);
-//		float reflectT = SphereIntersection(intersectionPoint, reflectedRay, otherSphereCenter, otherRadius);
-//		
-//
-//		if(lightT <= 0)
-//		{
-//			if(reflectT > 0)
-//			{
-//				const float4 reflectionIntersectionPoint = intersectionPoint + reflectedRay * reflectT;
-//				const float4 reflectionIntersectionNormal = reflectionIntersectionPoint - otherSphereCenter;
-//				float4 litOtherSphereColor = PointLightContribution(reflectionIntersectionPoint, reflectionIntersectionNormal, otherSphereColor, lightPosition, cameraPosition);
-//				// Didn't compile
-//				//pixelColor = sphereColor * 0.7f + otherSphereColor * 0.3f;
-//				pixelColor = sphereColor * 0.7f;
-//				pixelColor += litOtherSphereColor * 0.3f;
-//			}
-//			else
-//			{
-//				pixelColor = sphereColor * 1.0f;
-//				pixelColor += make_float4(BACKGROUND_COLOR) * 0.0f;
-//			}
-//			
-//			// If not, light it fully
-//			pixelColor = PointLightContribution(intersectionPoint, intersectionNormal, pixelColor, lightPosition, cameraPosition);
-//		}
-//		else
-//		{
-//			//intersectionPoint = intersectionPoint + lightT * ray;
-//			//intersectionNormal = normalize(intersectionPoint - otherSphereCenter);
-//
-//			//pixelColor = PointLightContribution(intersectionPoint, intersectionNormal, otherSphereColor, lightPosition, cameraPosition);
-//
-//			// Otherwise it is shadowed, just use ambient light
-//			pixelColor = sphereColor * AMBIENT_STRENGTH;
-//			pixelColor.w = 1.0f;
-//		}
-//	}
-//	else if(otherT > 0)
-//	{
-//		intersectionPoint = cameraPosition + otherT * ray;
-//		intersectionNormal = normalize(intersectionPoint - otherSphereCenter);
-//
-//		pixelColor = PointLightContribution(intersectionPoint, intersectionNormal, otherSphereColor, lightPosition, cameraPosition);
-//	}
-//	else
-//	{
-//		pixelColor = make_float4(BACKGROUND_COLOR);
-//	}
-//
-//	dest[pixelIndex] = make_uchar4((unsigned char)(pixelColor.x * 255), (unsigned char)(pixelColor.y * 255), (unsigned char)(pixelColor.z * 255), 255);
-//}
+__global__ void PostProcessing(uchar4* dest, const int imageW, const int imageH)
+{
+	const int ix = blockIdx.x * blockDim.x + threadIdx.x;
+	const int iy = blockIdx.y * blockDim.y + threadIdx.y;
+
+	float4 newColor;
+
+	if(ix > 0 && ix < (imageW - 1) && iy > 0 && iy < (imageH - 1))
+	{
+		newColor = make_float4(0, 0, 0, 0);
+		for(int x = -1; x < 2; ++x)
+		{
+			for(int y = -1; y < 2; ++y)
+			{
+				int i = imageW * (iy + y) + (ix + x);
+				newColor.x += ONE_NINTH * float(dest[i].x);
+				newColor.y += ONE_NINTH * float(dest[i].y);
+				newColor.z += ONE_NINTH * float(dest[i].z);
+			}
+		}
+		newColor.w = 255;
+
+		int i = imageW * iy + ix;
+		dest[i].x = unsigned char(newColor.x);
+		dest[i].y = unsigned char(newColor.y);
+		dest[i].z = unsigned char(newColor.z);
+		dest[i].w = 255;
+	}
+}
 
 __global__ void RayTracerWithTexture(uchar4* dest, const int imageW, const int imageH, float3 cameraPosition, float3 cameraUp, float3 cameraForward, float3 cameraRight, float nearPlaneDistance, float2 viewSize, int numSpheres)
 {
@@ -343,7 +276,7 @@ __global__ void RayTracerWithTexture(uchar4* dest, const int imageW, const int i
 
 				for(j = i; j >= 1; --j)
 				{
-					colorComponents[j - 1] = colorComponents[j - 1] * 0.7f + colorComponents[j] * 0.3f;
+					colorComponents[j - 1] = colorComponents[j - 1] * 0.75f + colorComponents[j] * 0.25f;
 				}
 
 				pixelColor = colorComponents[j];
@@ -525,6 +458,7 @@ void RunRayTracerWithTexture(uchar4* dest, const int imageW, const int imageH, c
 
 
 	RayTracerWithTexture<<<numBlocks, numThreads>>>(dest, imageW, imageH, a_vCameraPosition, a_vCameraUp, a_vCameraForward, a_vCameraRight, a_fNearPlaneDistance, viewSize, NUMBER_OF_SPHERES);
+	//PostProcessing<<<numBlocks, numThreads>>>(dest, imageW, imageH);
 
 	//huge performance decrease
 	checkCudaErrors(cudaFreeArray(cuArray));

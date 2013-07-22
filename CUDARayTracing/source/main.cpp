@@ -298,7 +298,7 @@ void ProcessMouseClick(int button, int state, int x, int y)
 
 void ProcessMouseMove(int x, int y)
 {
-	printf("%d %d\n", x, y);
+	//printf("%d %d\n", x, y);
 
 	float xAngle = (x - g_nLastMouseX) / 90.0f;
 	float yAngle = (y - g_nLastMouseY) / 90.0f;

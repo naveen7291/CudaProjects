@@ -57,7 +57,6 @@
 #include <stdlib.h>
 #include "LinearAlgebraUtil.h"
 
-extern "C" void RunRayTracer(uchar4* dest, const int imageW, const int imageH, const int xThreadsPerBlock, const float3 a_vCameraPosition, const float3 cameraForward, const float3 cameraUp, const float3 cameraRight, const float a_fNearPlaneDistance);
 extern "C" void RunRayTracerWithTexture(float* sceneData, int sceneSize, uchar4* dest, const int imageW, const int imageH, const int xThreadsPerBlock, const float3 a_vCameraPosition, const float3 cameraForward, const float3 cameraUp, const float3 cameraRight, const float a_fNearPlaneDistance);
 
 #endif

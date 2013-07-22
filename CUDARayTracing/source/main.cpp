@@ -21,6 +21,14 @@
 //#include <helper_cuda_gl.h>
 //#include <rendercheck_gl.h>
 
+#include <sstream>
+#include <string>
+#include <time.h>
+#include <stdlib.h>
+
+
+using namespace std;
+
 void RenderImage();
 void UpdateInputs();
 void ComputeFPS();
@@ -37,6 +45,8 @@ void InitializeOpenGL(int* argc, char** argv);
 void InitializeOpenGLBuffers(int w, int h);
 GLuint compileASMShader(GLenum program_type, const char *code);
 void CleanUp();
+
+void InitializeScene(char* fileName);
 
 // OpenGL PBO and texture "names"
 GLuint gl_PBO, gl_Tex, gl_Shader;
@@ -57,6 +67,8 @@ float3 g_vCameraForward;
 float3 g_vCameraRight;
 float3 g_vCameraUp;
 float g_fNearPlaneDistance;
+int g_nScreenWidth;
+int g_nScreenHeight;
 
 // Input flags
 bool g_aInputFlags[NUMBER_OF_INPUTS];
@@ -65,9 +77,22 @@ bool g_bMouseRightDown;
 int g_nLastMouseX;
 int g_nLastMouseY;
 
+// Scene data
+float* g_pSceneData;
+int g_nSceneSize;
+
 int main(int argc, char** argv)
 {
 	InitializeOpenGL(&argc, argv);
+
+	if(argc > 1)
+	{
+		InitializeScene(argv[1]);
+	}
+	else
+	{
+		InitializeScene(NULL);
+	}
 
 	sdkCreateTimer(&hTimer);
 	sdkStartTimer(&hTimer);
@@ -85,7 +110,7 @@ void RenderImage()
 	size_t num_bytes;
 	checkCudaErrors(cudaGraphicsResourceGetMappedPointer((void **)&d_Dest, &num_bytes, cuda_pbo_resource));
 
-	RunRayTracerWithTexture(d_Dest, WINDOW_WIDTH, WINDOW_HEIGHT, 0, g_vCameraLocation, g_vCameraForward, g_vCameraUp, g_vCameraRight, g_fNearPlaneDistance);
+	RunRayTracerWithTexture(g_pSceneData, g_nSceneSize, d_Dest, g_nScreenWidth, g_nScreenHeight, 0, g_vCameraLocation, g_vCameraForward, g_vCameraUp, g_vCameraRight, g_fNearPlaneDistance);
 
 	cudaDeviceSynchronize();
 	checkCudaErrors(cudaGraphicsUnmapResources(1, &cuda_pbo_resource, 0));
@@ -102,7 +127,7 @@ void Display()
     // load texture from PBO
     //  glBindBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, gl_PBO);
     glBindTexture(GL_TEXTURE_2D, gl_Tex);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, g_nScreenWidth, g_nScreenHeight, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
     //  glBindBufferARB(GL_PIXEL_UNPACK_BUFFER_ARB, 0);
 
     // fragment program is required to display floating point texture
@@ -136,23 +161,47 @@ void UpdateInputs()
 	{
 		g_vCameraLocation += g_vCameraForward * CAMERA_MOVEMENT_DELTA;
 	}
+	if(g_aInputFlags['W'])
+	{
+		g_vCameraLocation += g_vCameraForward * CAMERA_MOVEMENT_DELTA * 10.0f;
+	}
+	if(g_aInputFlags['z'])
+	{
+		g_vCameraLocation += g_vCameraForward * CAMERA_MOVEMENT_DELTA * 0.1f;
+	}
 	if(g_aInputFlags['s'])
 	{
 		g_vCameraLocation -= g_vCameraForward * CAMERA_MOVEMENT_DELTA;
+	}
+	if(g_aInputFlags['S'])
+	{
+		g_vCameraLocation -= g_vCameraForward * CAMERA_MOVEMENT_DELTA * 10.0f;
+	}
+	if(g_aInputFlags['x'])
+	{
+		g_vCameraLocation -= g_vCameraForward * CAMERA_MOVEMENT_DELTA * 0.1f;
 	}
 	if(g_aInputFlags['a'])
 	{
 		g_vCameraLocation -= g_vCameraRight * CAMERA_MOVEMENT_DELTA;
 	}
+	if(g_aInputFlags['A'])
+	{
+		g_vCameraLocation -= g_vCameraRight * CAMERA_MOVEMENT_DELTA * 10.0f;
+	}
 	if(g_aInputFlags['d'])
 	{
 		g_vCameraLocation += g_vCameraRight * CAMERA_MOVEMENT_DELTA;
 	}
-	if(g_aInputFlags['o'])
+	if(g_aInputFlags['D'])
+	{
+		g_vCameraLocation += g_vCameraRight * CAMERA_MOVEMENT_DELTA * 10.0f;
+	}
+	if(g_aInputFlags['q'])
 	{
 		g_vCameraLocation -= g_vCameraUp * CAMERA_MOVEMENT_DELTA;
 	}
-	if(g_aInputFlags['p'])
+	if(g_aInputFlags['e'])
 	{
 		g_vCameraLocation += g_vCameraUp * CAMERA_MOVEMENT_DELTA;
 	}
@@ -187,7 +236,7 @@ void ComputeFPS()
 void Reshape(int w, int h)
 {
     //glViewport(0, 0, w, h);
-	glViewport(0, 0, WINDOW_WIDTH, WINDOW_HEIGHT);
+	glViewport(0, 0, w, h);
 
     glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
@@ -197,7 +246,10 @@ void Reshape(int w, int h)
     glOrtho(0.0, 1.0, 0.0, 1.0, 0.0, 1.0);
 
     //InitializeOpenGLBuffers(w, h);
-	InitializeOpenGLBuffers(WINDOW_WIDTH, WINDOW_HEIGHT);
+	InitializeOpenGLBuffers(w, h);
+
+	g_nScreenWidth = w;
+	g_nScreenHeight = h;
 }
 
 void ProcessKeyboard(unsigned char k, int, int)
@@ -205,8 +257,6 @@ void ProcessKeyboard(unsigned char k, int, int)
 	switch (k)
     {
         case '\033':
-        case 'q':
-        case 'Q':
             printf("Shutting down...\n");
             exit(EXIT_SUCCESS);
             break;
@@ -215,7 +265,7 @@ void ProcessKeyboard(unsigned char k, int, int)
 			g_aInputFlags[k] = true;
    }
 
-   printf("Camera Location: (%f, %f, %f), NearPlaneDistance: %f\n", g_vCameraLocation.x, g_vCameraLocation.y, g_vCameraLocation.z, g_fNearPlaneDistance);
+   //printf("Camera Location: (%f, %f, %f), NearPlaneDistance: %f\n", g_vCameraLocation.x, g_vCameraLocation.y, g_vCameraLocation.z, g_fNearPlaneDistance);
 }
 
 void ProcessKeyboardUp(unsigned char k, int, int)
@@ -318,6 +368,8 @@ void InitializeOpenGL(int* argc, char** argv)
 	g_vCameraUp = make_float3(CAMERA_UP);
 	g_vCameraRight = make_float3(CAMERA_RIGHT);
 	g_fNearPlaneDistance = NEAR_PLANE_DISTANCE;
+	g_nScreenWidth = WINDOW_WIDTH;
+	g_nScreenHeight = WINDOW_HEIGHT;
 
 	for(int i = 0; i < NUMBER_OF_INPUTS; ++i)
 	{
@@ -419,7 +471,13 @@ GLuint compileASMShader(GLenum program_type, const char *code)
 
 void CleanUp()
 {
-   if (h_Source)
+	if(g_pSceneData)
+	{
+		free(g_pSceneData);
+		g_pSceneData = 0;
+	}
+
+	if (h_Source)
     {
         free(h_Source);
         h_Source = 0;
@@ -435,4 +493,54 @@ void CleanUp()
     glDeleteTextures(1, &gl_Tex);
     glDeleteProgramsARB(1, &gl_Shader);
     exit(EXIT_SUCCESS);
+}
+
+float random()
+{
+	return ((float) rand() / (RAND_MAX));
+}
+
+void InitializeScene(char* fileName)
+{
+	if(fileName != NULL)
+	{
+		ifstream source;
+
+		source.open(fileName, ios_base::in);
+
+		if(!source)
+		{
+			return;
+		}
+
+		source >> g_nSceneSize;
+
+		g_pSceneData = (float*)malloc(g_nSceneSize * SIZEOF_SPHERE);
+
+		for(int i = 0; i < g_nSceneSize; ++i)
+		{
+			for(int j = 0; j < SPHERE_NUMFLOATS; ++j)
+			{
+				source >> g_pSceneData[i * SPHERE_NUMFLOATS + j];
+			}
+		}
+	}
+	else
+	{
+		srand(time(NULL));
+		g_nSceneSize = 5;
+		g_pSceneData = (float*)malloc(g_nSceneSize * SIZEOF_SPHERE);
+
+		for(int i = 0; i < g_nSceneSize; ++i)
+		{
+			g_pSceneData[i * SPHERE_NUMFLOATS + SPHERE_COLOR_R] = random();
+			g_pSceneData[i * SPHERE_NUMFLOATS + SPHERE_COLOR_G] = random();
+			g_pSceneData[i * SPHERE_NUMFLOATS + SPHERE_COLOR_B] = random();
+			g_pSceneData[i * SPHERE_NUMFLOATS + SPHERE_COLOR_A] = 1;
+			g_pSceneData[i * SPHERE_NUMFLOATS + SPHERE_POS_X] = random() * 300;
+			g_pSceneData[i * SPHERE_NUMFLOATS + SPHERE_POS_Y] = random() * -300;
+			g_pSceneData[i * SPHERE_NUMFLOATS + SPHERE_POS_Z] = random() * 300;
+			g_pSceneData[i * SPHERE_NUMFLOATS + SPHERE_RADIUS] = random() * 50 + 10;
+		}
+	}
 }

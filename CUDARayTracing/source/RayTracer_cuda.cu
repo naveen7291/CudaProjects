@@ -158,6 +158,11 @@ __global__ void RayTracerWithTexture(uchar4* dest, const int imageW, const int i
 	const int ix = blockIdx.x * blockDim.x + threadIdx.x;
 	const int iy = blockIdx.y * blockDim.y + threadIdx.y;
 
+	if(ix >= imageW || iy >= imageH)
+	{
+		return;
+	}
+
 	// Compute the location in the dest array that will be written to
 	const int pixelIndex = imageW * iy + ix;
 	float4 colorComponents[REFLECTION_DEPTH];
@@ -276,7 +281,7 @@ __global__ void RayTracerWithTexture(uchar4* dest, const int imageW, const int i
 
 				for(j = i; j >= 1; --j)
 				{
-					colorComponents[j - 1] = colorComponents[j - 1] * 0.75f + colorComponents[j] * 0.25f;
+					colorComponents[j - 1] = colorComponents[j - 1] * 0.70f + colorComponents[j] * 0.30f;
 				}
 
 				pixelColor = colorComponents[j];
@@ -391,6 +396,7 @@ __device__ float QuadraticSolver(float A, float B, float C)
 	return t;
 }
 
+
 void RunRayTracer(uchar4* dest, const int imageW, const int imageH, const int xThreadsPerBlock, const float3 a_vCameraPosition, const float3 a_vCameraForward, const float3 a_vCameraUp, const float3 a_vCameraRight, const float a_fNearPlaneDistance)
 {
 	dim3 numThreads(16, 16);
@@ -403,51 +409,33 @@ void RunRayTracer(uchar4* dest, const int imageW, const int imageH, const int xT
 	RayTracer<<<numBlocks, numThreads>>>(dest, imageW, imageH, a_vCameraPosition, a_vCameraUp, a_vCameraForward, a_vCameraRight, a_fNearPlaneDistance, viewSize);
 }
 
-void RunRayTracerWithTexture(uchar4* dest, const int imageW, const int imageH, const int xThreadsPerBlock, const float3 a_vCameraPosition, const float3 a_vCameraForward, const float3 a_vCameraUp, const float3 a_vCameraRight, const float a_fNearPlaneDistance)
+void RunRayTracerWithTexture(float* sceneData, int sceneSize, uchar4* dest, const int imageW, const int imageH, const int xThreadsPerBlock, const float3 a_vCameraPosition, const float3 a_vCameraForward, const float3 a_vCameraUp, const float3 a_vCameraRight, const float a_fNearPlaneDistance)
 {
-	dim3 numThreads(16, 16);
-	dim3 numBlocks(80, 45);
+	int xBlocks, yBlocks;
+	xBlocks = imageW / THREAD_COUNT;
+	yBlocks = imageH / THREAD_COUNT;
+
+	if(imageW % THREAD_COUNT > 0)
+	{
+		xBlocks++;
+	}
+	if(imageH % THREAD_COUNT > 0)
+	{
+		yBlocks++;
+	}
+
+	dim3 numThreads(THREAD_COUNT, THREAD_COUNT);
+	dim3 numBlocks(xBlocks, yBlocks);
 	float2 viewSize;
-	float* sceneData;
 
 	viewSize = make_float2((float)imageW, (float)imageH);
-
-	sceneData = (float *)malloc(NUMBER_OF_SPHERES * SIZEOF_SPHERE);
-
-	sceneData[0] = 0.4f;
-	sceneData[1] = 0;
-	sceneData[2] = 0.4f;
-	sceneData[3] = 1.0f;
-	sceneData[4] = 0;
-	sceneData[5] = -100;
-	sceneData[6] = 50;
-	sceneData[7] = 100.0f;
-
-	sceneData[8] = 0;
-	sceneData[9] = 0.4f;
-	sceneData[10] = 0.4f;
-	sceneData[11] = 1.0f;
-	sceneData[12] = 0;
-	sceneData[13] = 5;
-	sceneData[14] = 30;
-	sceneData[15] = 1.0f;
-
-	sceneData[16] = 0.4f;
-	sceneData[17] = 0.4f;
-	sceneData[18] = 0;
-	sceneData[19] = 1.0f;
-	sceneData[20] = 10;
-	sceneData[21] = 5;
-	sceneData[22] = 30;
-	sceneData[23] = 1.0f;
     
 	cudaChannelFormatDesc channelDesc =
         cudaCreateChannelDesc<float>();
  
     cudaArray *cuArray;
-    checkCudaErrors(cudaMallocArray(&cuArray, &channelDesc, NUMBER_OF_SPHERES * SIZEOF_SPHERE, 1));
-	checkCudaErrors(cudaMemcpyToArray(cuArray, 0, 0, sceneData, NUMBER_OF_SPHERES * SIZEOF_SPHERE, cudaMemcpyHostToDevice));
-	free(sceneData);
+    checkCudaErrors(cudaMallocArray(&cuArray, &channelDesc, sceneSize * SIZEOF_SPHERE, 1));
+	checkCudaErrors(cudaMemcpyToArray(cuArray, 0, 0, sceneData, sceneSize * SIZEOF_SPHERE, cudaMemcpyHostToDevice));
 
 	tex.addressMode[0] = cudaAddressModeWrap;
 	tex.addressMode[1] = cudaAddressModeWrap;
@@ -457,7 +445,7 @@ void RunRayTracerWithTexture(uchar4* dest, const int imageW, const int imageH, c
 	checkCudaErrors(cudaBindTextureToArray(tex, cuArray, channelDesc));
 
 
-	RayTracerWithTexture<<<numBlocks, numThreads>>>(dest, imageW, imageH, a_vCameraPosition, a_vCameraUp, a_vCameraForward, a_vCameraRight, a_fNearPlaneDistance, viewSize, NUMBER_OF_SPHERES);
+	RayTracerWithTexture<<<numBlocks, numThreads>>>(dest, imageW, imageH, a_vCameraPosition, a_vCameraUp, a_vCameraForward, a_vCameraRight, a_fNearPlaneDistance, viewSize, sceneSize);
 	//PostProcessing<<<numBlocks, numThreads>>>(dest, imageW, imageH);
 
 	//huge performance decrease
